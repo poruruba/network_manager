@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src * data: gap: https://ssl.gstatic.com 'unsafe-eval' 'unsafe-inline'; style-src * 'unsafe-inline'; media-src *; img-src * data: content: blob:;">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="msapplication-tap-highlight" content="no">
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width">
+
+  <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+  <script src="https://code.jquery.com/jquery-1.12.4.min.js" integrity="sha384-nvAa0+6Qg9clwYCGGPpDQLVpLNn0fRaROjHqs13t4Ggj3Ez50XnGQqc/r8MhnRDZ" crossorigin="anonymous"></script>
+  <!-- Latest compiled and minified CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
+  <!-- Optional theme -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap-theme.min.css" integrity="sha384-6pzBo3FDv/PJ8r2KRkGHifhEocL+1X2rVCTTkUfGk7/0pbek5mMa1upzvWbrUbOZ" crossorigin="anonymous">
+  <!-- Latest compiled and minified JavaScript -->
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js" integrity="sha384-aJ21OjlMXNL5UyIl/XNwTMqvzeRMZH2w8c5cRVpzpU8Y5bApTppSuUkhZXN0VxHd" crossorigin="anonymous"></script>
+
+  <title>ネットワーク管理</title>
+
+  <link rel="stylesheet" href="css/start.css">
+  <script src="js/methods_bootstrap.js"></script>
+  <script src="js/components_bootstrap.js"></script>
+  <script src="js/vue_utils.js"></script>
+
+  <script src="dist/js/vconsole.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+  <script src="https://kit.fontawesome.com/d905d8e948.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="dist/css/bootstrap-treeview.min.css">
+  <script src="dist/js/bootstrap-treeview.min.js"></script>
+</head>
+
+<body>
+  <div id="top" class="container">
+    <div class="page-header">
+      <h1>ネットワーク管理</h1>
+    </div>
+
+    <div class="row">
+      <div class="col-xs-4" id="tree"></div>
+      <div class="col-xs-8">
+        <collapse-panel class="panel-default" id="target" v-bind:title="current_node.name" v-if="current_node">
+          <span slot="content">
+            <div class="panel-body">
+              <img v-bind:src="current_node.image_url" width="100" height="100" class="img-thumbnail" v-if="current_node.image_url">
+              <button class="btn btn-default btn-xs pull-right" v-on:click="do_update_node">変更</button><br><br>
+              <dl class="dl-horizontal">
+                <dt>uuid</dt>
+                <dd>{{current_node.uuid}}</dd>
+                <dt>parent_uuid</dt>
+                <dd>{{current_node_parent_uuid}}</dd>
+                <dt>type</dt>
+                <dd>{{current_node.type}}</dd>
+                <dt>description</dt>
+                <dd>{{current_node.description}}</dd>
+                <dt>icon</dt>
+                <dd>{{current_node.icon}} <span v-bind:class="'fas ' + current_node.icon"></span></dd>
+                <dt>hostname</dt>
+                <dd>{{current_node.hostname}}</dd>
+                <dt>ipaddress</dt>
+                <dd>{{current_node.ipaddress}}</dd>
+              </dl>
+              <label>Endpoints</label>
+              <button class="btn btn-default btn-xs pull-right" v-on:click="do_append_endpoint">エンドポイントの追加</button>
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>name</th>
+                    <th>url</th>
+                    <th>削除</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(endpoint, index) in current_node.endpoints">
+                    <td>{{index + 1}}</td>
+                    <td>{{endpoint.name}}</a></td>
+                    <td v-if="endpoint.url.startsWith('http')"><a v-bind:href="endpoint.url" target="_blank">{{endpoint.url}}</a></td>
+                    <td v-else>{{endpoint.url}}</td>
+                    <td><button class="btn btn-default btn-xs" v-on:click="do_remove_endpoint(index)">削除</button></td>
+                  </tr>
+                </tbody>
+              </table>
+              <button class="btn btn-default btn-xs pull-right" v-on:click="do_set_root(null)" v-if="current_node.uuid==top_uuid">ルートを解除</button>
+              <button class="btn btn-default btn-xs pull-right" v-on:click="do_set_root(current_node.uuid)" v-else>ルートに設定</button>
+              <button class="btn btn-default btn-xs pull-right" v-on:click="do_remove_node">削除</button>
+              <button class="btn btn-default btn-xs pull-right" v-on:click="do_change_node">場所の変更</button>
+            </div>
+          </span>
+        </collapse-panel>
+
+        <button class="btn btn-default pull-right" v-on:click="do_append_node">ノードの追加</button><br>
+        <label>Nodes</label>
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>name</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(node, index) in current_node_nodes">
+              <td>{{index + 1}}</td>
+              <td><a v-on:click="select_node(node)">{{node.text}}</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+
+      </div>
+    </div>
+
+    <modal-dialog id="append_node_dialog">
+      <span slot="content">
+        <div class="modal-header">
+          ノードの追加
+        </div>
+        <div class="modal-body">
+          <div class="form-horizontal">
+            <div class="form-group">
+              <label class="col-xs-2 control-label">type</label>
+              <div class="col-xs-10 form-inline">
+                <select class="form-control" v-model="target_node.type">
+                  <option v-for="(value, index) in type_list" v-bind:value="value">{{value}}</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">name</label>
+              <div class="col-xs-10">
+                <input type="text" class="form-control" v-model="target_node.name">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">description</label>
+              <div class="col-xs-10">
+                <textarea rows="2" class="form-control" v-model="target_node.description"></textarea>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">
+                icon
+                <a data-toggle="tooltip" title='"fa-desktop","fa-database", "fa-ethernet", "fa-hdd", "fa-laptop", "fa-mobile-alt", "fa-print", "fa-server", "fa-tablet-alt", "fa-tv", "fa-laptop-house", "fa-sim-card"'>tips</a>
+              </label>
+              <div class="col-xs-10 form-inline">
+                <input type="text" class="form-control" v-model="target_node.icon">
+                <span v-bind:class="'fas ' + target_node.icon"></span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">image_url</label>
+              <div class="col-xs-10">
+                <input type="text" class="form-control" v-model="target_node.image_url">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">hostname</label>
+              <div class="col-xs-10 form-inline">
+                <input type="text" class="form-control" v-model="target_node.hostname">
+                <button class="btn btn-default btn-sm" v-on:click="do_resolve">解決</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">ipaddress</label>
+              <div class="col-xs-10 form-inline">
+                <input type="text" class="form-control" v-model="target_node.ipaddress">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-default" v-on:click="append_node">追加</button>
+          <button class="btn btn-default" v-on:click="dialog_close('#append_node_dialog')">キャンセル</button>
+        </div>
+      </span>
+    </modal-dialog>
+
+    <modal-dialog id="update_node_dialog">
+      <span slot="content">
+        <div class="modal-header">
+          ノードの変更
+        </div>
+        <div class="modal-body" v-if="current_node">
+          <div class="form-horizontal">
+            <div class="form-group">
+              <label class="col-xs-2 control-label">type</label>
+              <div class="col-xs-10 form-inline">
+                <select class="form-control" v-model="target_node.type">
+                  <option v-for="(value, index) in type_list" v-bind:value="value">{{value}}</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">name</label>
+              <div class="col-xs-10">
+                <input type="text" class="form-control" v-model="target_node.name">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">description</label>
+              <div class="col-xs-10">
+                <textarea rows="2" class="form-control" v-model="target_node.description"></textarea>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">
+                icon
+                <a data-toggle="tooltip" title='"fa-desktop","fa-database", "fa-ethernet", "fa-hdd", "fa-laptop", "fa-mobile-alt", "fa-print", "fa-server", "fa-tablet-alt", "fa-tv", "fa-laptop-house", "fa-sim-card"'>tips</a>
+              </label>
+              <div class="col-xs-10 form-inline">
+                <input type="text" class="form-control" v-model="target_node.icon">
+                <span v-bind:class="'fas ' + target_node.icon"></span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">image_url</label>
+              <div class="col-xs-10">
+                <input type="text" class="form-control" v-model="target_node.image_url">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">hostname</label>
+              <div class="col-xs-10 form-inline">
+                <input type="text" class="form-control" v-model="target_node.hostname">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-xs-2 control-label">ipaddress</label>
+              <div class="col-xs-10 form-inline">
+                <input type="text" class="form-control" v-model="target_node.ipaddress">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-default" v-on:click="update_node">変更</button>
+          <button class="btn btn-default" v-on:click="dialog_close('#update_node_dialog')">キャンセル</button>
+        </div>
+      </span>
+    </modal-dialog>
+
+    <modal-dialog id="change_node_dialog">
+      <span slot="content">
+        <div class="modal-header">
+          エンティティの場所の変更
+        </div>
+        <div class="modal-body" v-if="current_node">
+          <div class="form-inline">
+            <label>新しい親ノード</label>
+            <select class="form-control" v-model="change_node_parent_uuid">
+              <option value="">無し</option>
+              <option v-for="(node, index in node_list" v-bind:value="node.uuid" v-if="node.uuid!=current_node.uuid">{{node.name}}</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-default" v-on:click="change_node">変更</button>
+          <button class="btn btn-default" v-on:click="dialog_close('#change_node_dialog')">キャンセル</button>
+        </div>
+      </span>
+    </modal-dialog>
+
+    <modal-dialog id="append_endpoint_dialog">
+      <span slot="content">
+        <div class="modal-header">
+          エンドポイントの追加
+        </div>
+        <div class="modal-body">
+          <label>name</label> <input type="text" class="form-control" v-model="target_endpoint.name"><br>
+          <label>url</label> <input type="text" class="form-control" v-model="target_endpoint.url"><br>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-default" v-on:click="append_endpoint">変更</button>
+          <button class="btn btn-default" v-on:click="dialog_close('#append_endpoint_dialog')">キャンセル</button>
+        </div>
+      </span>
+    </modal-dialog>
+
+
+    <!-- for progress-dialog -->
+    <progress-dialog v-bind:title="progress_title"></progress-dialog>
+  </div>
+
+  <script src="js/start.js"></script>
+</body>
