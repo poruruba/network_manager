@@ -31,6 +31,7 @@ var vue_options = {
         this.select_node(ret[0]);
     },
     do_search_clear: function(){
+      this.search_name = '';
       $('#tree').treeview('clearSearch');
     },
 
