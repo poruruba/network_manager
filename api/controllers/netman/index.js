@@ -115,22 +115,22 @@ function put_list(list){
 function append_detail(detail){
   var target_uuid = uuid.v4();
   detail.uuid = target_uuid;
-  fs.writeFileSync(NETMAN_DETAIL_BASE + '/' + target_uuid + '.json', JSON.stringify(detail), 'utf8');
+  fs.writeFileSync(`${NETMAN_DETAIL_BASE}/${target_uuid}.json`, JSON.stringify(detail), 'utf8');
   return target_uuid;
 }
 
 function get_detail(target_uuid){
-  return JSON.parse(fs.readFileSync(NETMAN_DETAIL_BASE + '/' + target_uuid + '.json', 'utf8'));
+  return JSON.parse(fs.readFileSync(`${NETMAN_DETAIL_BASE}/${target_uuid}.json`, 'utf8'));
 }
 
 function update_detail(detail){
-  var target = JSON.parse(fs.readFileSync(NETMAN_DETAIL_BASE + '/' + detail.uuid + '.json', 'utf8'));
+  var target = JSON.parse(fs.readFileSync(`${NETMAN_DETAIL_BASE}/${detail.uuid}.json`, 'utf8'));
   Object.keys(detail).forEach((value) =>{
     target[value] = detail[value];
   });
-  fs.writeFileSync(NETMAN_DETAIL_BASE + '/' + detail.uuid + '.json', JSON.stringify(target), 'utf8');
+  fs.writeFileSync(`${NETMAN_DETAIL_BASE}/${detail.uuid}.json`, JSON.stringify(target), 'utf8');
 }
 
 function remove_detail(target_uuid){
-  fs.unlinkSync(NETMAN_DETAIL_BASE + '/' + target_uuid + '.json');
+  fs.unlinkSync(`${NETMAN_DETAIL_BASE}/${target_uuid}.json`);
 }
