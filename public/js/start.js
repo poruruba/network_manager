@@ -10,21 +10,31 @@ var vue_options = {
   data: {
     progress_title: '', // for progress-dialog
 
-    tree: null,
+    current_tree_node: null,
+    current_node_uuid: null,
     current_node: null,
-    current_node_nodes: null,
-    current_node_parent_uuid: null,
     target_node: {},
-    target_node_parent_uuid: null,
     type_list: type_list,
     change_node_parent_uuid: null,
     node_list: [],
     target_endpoint: {},
     top_uuid: null,
+    search_name: '',
   },
   computed: {
   },
   methods: {
+    // ツリー検索
+    do_search: function(){
+      var ret = $('#tree').treeview('search', [this.search_name]);
+      if( ret.length > 0 )
+        this.select_node(ret[0]);
+    },
+    do_search_clear: function(){
+      $('#tree').treeview('clearSearch');
+    },
+
+    // IPアドレスの正引き
     do_resolve: function(){
       return do_post_netman('/netman-resolve-ipaddress', { hostname: this.target_node.hostname } )
       .then(result =>{
@@ -34,16 +44,18 @@ var vue_options = {
         }
       });
     },
+
+    // エンドポイント管理
     append_endpoint: function() {
-      this.target_node = JSON.parse(JSON.stringify(this.current_node));
-      if( !this.target_node.endpoints )
-        this.target_node.endpoints = [];
-      this.target_node.endpoints.push(this.target_endpoint);
-      return do_post_netman('/netman-update', { detail: this.target_node } )
-      .then(result =>{
+      var detail = JSON.parse(JSON.stringify(this.current_node));
+      if( !detail.endpoints )
+        detail.endpoints = [];
+      detail.endpoints.push(this.target_endpoint);
+      return do_post_netman('/netman-update', { detail: detail } )
+      .then(async (result) =>{
         this.dialog_close('#append_endpoint_dialog');
-        alert('変更しました。');
-        this.update_select_node(this.current_node.uuid);
+        alert('追加しました。');
+        await this.update_selected_node();
       });
     },
     do_append_endpoint: function() {
@@ -54,79 +66,100 @@ var vue_options = {
       if( !window.confirm('本当に削除しますか？'))
         return;
 
-      this.target_node = JSON.parse(JSON.stringify(this.current_node));
-      this.target_node.endpoints.splice(index, 1);
-      return do_post_netman('/netman-update', { detail: this.target_node } )
-      .then(result =>{
+      var detail = JSON.parse(JSON.stringify(this.current_node));
+      detail.endpoints.splice(index, 1);
+      return do_post_netman('/netman-update', { detail: detail } )
+      .then(async (result) =>{
         this.dialog_close('#append_endpoint_dialog');
         alert('削除しました。');
-        this.update_select_node(this.current_node.uuid);
+        await this.update_selected_node();
       });
     },
+    expand_endpoint: function(node, endpoint){
+      var t1 = endpoint.replace('${ipaddress}', node.ipaddress);
+      var t2 = t1.replace('${hostname}', node.hostname);
+      return t2;
+    },
 
+
+    // ノードの場所の変更
     do_change_node: function(){
+      this.change_node_parent_uuid = this.current_tree_node.parent_uuid;
       this.dialog_open('#change_node_dialog');
     },
     change_node: function(){
       try{
+        var target_uuid = this.current_node.uuid;
         if( this.change_node_parent_uuid == "" )
           this.change_node_parent_uuid = null;
-        check_loop(this.node_list, this.top_uuid, this.change_node_parent_uuid, this.current_node.uuid);
-        if( this.top_uuid == this.current_node.uuid )
-          this.top_uuid = null;
+        check_loop(this.node_list, this.top_uuid, this.change_node_parent_uuid, target_uuid);
       }catch(error){
         console.log(error);
         alert(error);
         return;
       }
 
-      return do_post_netman('/netman-change-parent', { uuid: this.current_node.uuid, parent_uuid: this.change_node_parent_uuid } )
-      .then(result =>{
+      return do_post_netman('/netman-change-parent', { uuid: target_uuid, parent_uuid: this.change_node_parent_uuid } )
+      .then(async (result) =>{
         this.dialog_close('#change_node_dialog');
         alert('変更しました。');
-        this.update_tree(this.top_uuid);
+        if( this.top_uuid == target_uuid )
+          this.top_uuid = null;
+        await this.update_tree();
+        this.select_node_uuid(target_uuid);
       });
     },
+
+    // ノードの内容の変更
     do_update_node: function(){
       this.target_node = JSON.parse(JSON.stringify(this.current_node));
       this.dialog_open('#update_node_dialog');
     },
     update_node: function(){
       return do_post_netman('/netman-update', { detail: this.target_node } )
-      .then(result =>{
+      .then(async (result) =>{
         this.dialog_close('#update_node_dialog');
         alert('変更しました。');
-        this.update_select_node(this.current_node.uuid);
+        await this.update_selected_node();
       });
     },
+
+    // ノードの削除
     do_remove_node: function(uuid){
       if( !window.confirm('本当に削除しますか？'))
         return;
 
-      return do_post_netman('/netman-remove', { uuid: this.current_node.uuid } )
-      .then(result =>{
+      var target_uuid = this.current_node.uuid;
+      return do_post_netman('/netman-remove', { uuid: target_uuid } )
+      .then(async (result) =>{
         alert('削除しました。');
-        this.update_tree(this.top_uuid);
-        if( this.top_uuid == this.current_node.uuid )
+        if( this.top_uuid == target_uuid ){
           this.top_uuid = null;
-        this.current_node = null;
-      });
-    },
-    do_append_node: function() {
-      this.target_node = {};
-      this.target_node_parent_uuid = (this.current_node) ? this.current_node.uuid : null;
-      this.dialog_open('#append_node_dialog');
-    },
-    append_node: async function() {
-      return do_post_netman('/netman-append', { detail: this.target_node, parent_uuid: this.target_node_parent_uuid } )
-      .then(result =>{
-        this.dialog_close('#append_node_dialog');
-        alert('追加しました。');
-        this.update_tree(this.top_uuid);
+          Cookies.set('top_uuid', this.top_uuid);
+        }
+        this.current_node_uuid = this.current_tree_node.parent_uuid;
+        await this.update_tree();
+        this.select_node_uuid(this.current_node_uuid);
       });
     },
 
-    do_set_root: function(top_uuid) {
+    // ノードの追加
+    do_append_node: function() {
+      this.target_node = {};
+      this.dialog_open('#append_node_dialog');
+    },
+    append_node: async function() {
+      return do_post_netman('/netman-append', { detail: this.target_node, parent_uuid: (this.current_node) ? this.current_node.uuid : null } )
+      .then(async (result) =>{
+        this.dialog_close('#append_node_dialog');
+        alert('追加しました。');
+        await this.update_tree();
+        this.select_node_uuid(this.current_node_uuid);
+      });
+    },
+
+    // ツリーのルート設定
+    do_set_root: async function(top_uuid) {
       try{
         check_loop(this.node_list, top_uuid);
       }catch(error){
@@ -137,49 +170,73 @@ var vue_options = {
 
       this.top_uuid = top_uuid;
       Cookies.set('top_uuid', this.top_uuid);
-      this.update_tree(this.top_uuid);
+      this.current_node_uuid = this.top_uuid;
+      await this.update_tree();
+      await this.update_selected_node();
     },
 
-    node_selected: async function(event, data) {
-      this.update_select_node(data.uuid);
-      if (data.uuid)
-        this.current_node_parent_uuid = data.parent_uuid;
-      else
-        this.current_node_parent_uuid = '';
+    // UUIDからツリーのノードを検索
+    search_node_uuid: function(uuid){
+      var data = $('#tree').treeview('getNode', 0);
+      return search_tree_node(data, uuid);
     },
-    update_select_node: async function(uuid){
-      if( uuid ){
-        var result = await do_post_netman('/netman-get', {
-          uuid: uuid
-        });
+
+    // ツリーのノード選択時
+    node_selected: async function(event, data) {
+      console.log('nodeSelected');
+      this.current_node_uuid = data.uuid;
+      this.current_tree_node = data;
+      this.parent_tree_node = this.search_node_uuid(data.parent_uuid);
+      await this.update_selected_node();
+    },
+
+    // ツリーの手動選択
+    select_node: function(node){
+      if( node != null ){
+        $('#tree').treeview('selectNode', [node]);
+        $('#tree').treeview('revealNode', node);
+      }else{
+        this.current_node = null;
+        this.current_tree_node = null;
+        this.parent_tree_node = null;
+      }
+    },
+    // ツリーの手動選択(UUID指定)
+    select_node_uuid: function(uuid){
+      var node = this.search_node_uuid(uuid);
+      this.select_node(node);
+    },
+
+    // ノードの表示更新
+    update_selected_node: async function(){
+      if( this.current_node_uuid != null){
+        var result = await do_post_netman('/netman-get', { uuid: this.current_node_uuid });
         this.current_node = result.detail;
       }else{
         this.current_node = null;
       }
-      var data = this.tree.treeview('getSelected');
-      this.current_node_nodes = data[0].nodes;
     },
-    select_node: function(node){
-      this.tree.treeview('selectNode', node);
-    },
-    update_tree: async function(top_uuid) {
+
+    // ツリーの表示更新
+    update_tree: async function() {
       var result = await do_post_netman('/netman-get-list');
       this.node_list = result.list;
 
-      var trees = get_top_and_orphan(result.list, top_uuid);
+      var trees = get_top_and_orphan(result.list, this.top_uuid);
+
       var data = [];
       if( trees.top )
         data.push(trees.top);
       data.push({
-        text: '未所属',
+        text: '未接続',
         nodes: trees.orphan,
       });
 
-      this.tree.treeview({
+      $('#tree').treeview({
         data: data,
         levels: 10,
       });
-      this.tree.on('nodeSelected', this.node_selected);
+      $('#tree').on('nodeSelected', this.node_selected);
     },
   },
   created: function() {
@@ -187,15 +244,19 @@ var vue_options = {
   mounted: function() {
     proc_load();
 
-    this.tree = $('#tree');
-
+    // ツリーのルート復元
     this.top_uuid = Cookies.get('top_uuid');
-    this.do_set_root(this.top_uuid);
+    this.current_node_uuid = this.top_uuid;
+    this.update_tree()
+    .then(() =>{
+      this.select_node_uuid(this.current_node_uuid);
+    });
   }
 };
 vue_add_methods(vue_options, methods_bootstrap);
 vue_add_components(vue_options, components_bootstrap);
 var vue = new Vue(vue_options);
+
 
 function do_post_netman(endpoint, body) {
   return do_post(base_url + endpoint, body)
@@ -224,14 +285,29 @@ function do_post(url, body) {
     });
 }
 
-function make_node(target){
-  return {
-    text: target.name,
-    uuid: target.uuid,
-    parent_uuid: target.parent_uuid,
-    icon: ( target.icon ) ? "fas " + target.icon : undefined,
-  };
+
+function find_element(list, uuid){
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].uuid == uuid)
+      return i;
+  }
+
+  return -1;
 }
+
+function search_tree_node(data, uuid){
+  if(data.uuid == uuid )
+    return data;
+
+  for( var i = 0 ; i < data.nodes.length ; i++ ){
+    var node = search_tree_node(data.nodes[i], uuid );
+    if( node != null )
+      return node;
+  }
+
+  return null;
+}
+
 
 function check_loop(list, top_uuid, parent_uuid, target_uuid){
   if( top_uuid == null )
@@ -284,11 +360,21 @@ function set_mark(list, base_uuid, except_uuid) {
   }
 }
 
+
+function make_node(target){
+  return {
+    text: target.name,
+    icon: target.icon,
+    uuid: target.uuid,
+    parent_uuid: target.parent_uuid,
+  };
+}
+
 function get_top_and_orphan(list, top_uuid){
   for( var i = 0 ; i < list.length ; i++ )
     list[i].isMarked = false;
 
-  var top = get_trees(list, top_uuid);
+  var top = make_trees(list, top_uuid);
 
   var orphan = [];
   for (var i = 0; i < list.length; i++) {
@@ -300,16 +386,7 @@ function get_top_and_orphan(list, top_uuid){
   return { top, orphan };
 }
 
-function find_element(list, uuid){
-  for (var i = 0; i < list.length; i++) {
-    if (list[i].uuid == uuid)
-      return i;
-  }
-
-  return -1;
-}
-
-function get_trees(list, uuid) {
+function make_trees(list, uuid) {
   var index = find_element(list, uuid);
   if( index < 0 )
     return null;
@@ -322,7 +399,7 @@ function get_trees(list, uuid) {
   element.nodes = [];
   for (var i = 0; i < list.length; i++) {
     if (list[i].parent_uuid == uuid)
-      element.nodes.push(get_trees(list, list[i].uuid));
+      element.nodes.push(make_trees(list, list[i].uuid));
   }
 
   return element;
