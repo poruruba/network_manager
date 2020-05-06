@@ -236,6 +236,7 @@ var vue_options = {
       $('#tree').treeview({
         data: data,
         levels: 10,
+        showTags: true,
       });
       $('#tree').on('nodeSelected', this.node_selected);
     },
@@ -402,6 +403,8 @@ function make_trees(list, uuid) {
     if (list[i].parent_uuid == uuid)
       element.nodes.push(make_trees(list, list[i].uuid));
   }
+  if( element.nodes.length > 0 )
+	  element.tags = [String(element.nodes.length)];
 
   return element;
 }
