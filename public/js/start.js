@@ -187,7 +187,10 @@ var vue_options = {
       console.log('nodeSelected');
       this.current_node_uuid = data.uuid;
       this.current_tree_node = data;
-      this.parent_tree_node = this.search_node_uuid(data.parent_uuid);
+      if( data.parent_uuid )
+          this.parent_tree_node = this.search_node_uuid(data.parent_uuid);
+      else
+	  this.parent_tree_node = null;
       await this.update_selected_node();
     },
 
@@ -379,7 +382,9 @@ function get_top_and_orphan(list, top_uuid){
   for( var i = 0 ; i < list.length ; i++ )
     list[i].isMarked = false;
 
-  var top = make_trees(list, top_uuid);
+  var top = null;
+  if( top_uuid )
+  	top = make_trees(list, top_uuid);
 
   var orphan = [];
   for (var i = 0; i < list.length; i++) {
