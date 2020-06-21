@@ -301,6 +301,9 @@ function search_tree_node(data, uuid){
   if(data.uuid == uuid )
     return data;
 
+  if( !data.nodes )
+    return null;
+	
   for( var i = 0 ; i < data.nodes.length ; i++ ){
     var node = search_tree_node(data.nodes[i], uuid );
     if( node != null )
